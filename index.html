@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Un bouquet pour toi</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0b10;overflow:hidden;}
+  canvas{display:block;width:100vw;height:100vh;}
+  #msg{position:fixed;left:0;right:0;bottom:4vh;text-align:center;
+       font-family:ui-monospace,Menlo,Consolas,monospace;color:#e8c9d6;
+       font-size:clamp(14px,2.4vw,22px);letter-spacing:.15em;opacity:.85;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="msg">je suis pas un vrai nerd?</div>
+<script>
+(function(){
+const COLS=130, ROWS=74;
+const RAMP=".,-~:;=!*#$@";
+const P=[]; // x,y,z,nx,ny,nz,r,g,b,mode(0=lit,1=flat)
+function add(x,y,z,nx,ny,nz,c,flat){P.push(x,y,z,nx,ny,nz,c[0],c[1],c[2],flat?1:0);}
+function norm(v){const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l];}
+function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function basis(n){const t=Math.abs(n[1])<0.9?[0,1,0]:[1,0,0];const u=norm(cross(n,t));return[u,cross(n,u)];}
+
+const RED=[235,50,70], PINK=[255,120,170], WHITE=[250,240,235], PURPLE=[170,100,240],
+      ORANGE=[255,150,60], YELLOW=[255,215,70], GREEN=[70,180,90], DGREEN=[40,130,60],
+      KRAFT=[215,170,120], RIBBON=[230,40,90];
+
+// ---- Fleurs
+function flower(p,n,R,col,petals){
+  const [u,v]=basis(n);
+  for(let r=0.01;r<=R;r+=0.011){
+    const steps=Math.max(12,Math.floor(r*260));
+    for(let i=0;i<steps;i++){
+      const th=i/steps*Math.PI*2;
+      const rmax=R*(0.55+0.45*Math.abs(Math.cos(petals/2*th)));
+      if(r>rmax) continue;
+      const cup=0.9*(r/R)*(r/R)*R;
+      const x=p[0]+(u[0]*Math.cos(th)+v[0]*Math.sin(th))*r+n[0]*cup;
+      const y=p[1]+(u[1]*Math.cos(th)+v[1]*Math.sin(th))*r+n[1]*cup;
+      const z=p[2]+(u[2]*Math.cos(th)+v[2]*Math.sin(th))*r+n[2]*cup;
+      const nn=norm([n[0]-(u[0]*Math.cos(th)+v[0]*Math.sin(th))*r/R*0.8,
+                     n[1]-(u[1]*Math.cos(th)+v[1]*Math.sin(th))*r/R*0.8,
+                     n[2]-(u[2]*Math.cos(th)+v[2]*Math.sin(th))*r/R*0.8]);
+      add(x,y,z,nn[0],nn[1],nn[2],col);
+    }
+  }
+  sphere([p[0]+n[0]*0.03,p[1]+n[1]*0.03,p[2]+n[2]*0.03],R*0.22,YELLOW);
+}
+function sphere(c,R,col){
+  for(let a=0;a<Math.PI;a+=0.12){
+    for(let b=0;b<Math.PI*2;b+=0.12){
+      const nx=Math.sin(a)*Math.cos(b), ny=Math.cos(a), nz=Math.sin(a)*Math.sin(b);
+      add(c[0]+nx*R,c[1]+ny*R,c[2]+nz*R,nx,ny,nz,col);
+    }
+  }
+}
+function stem(a,b){
+  const d=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], L=Math.hypot(...d);
+  for(let t=0;t<=1;t+=0.006/L){
+    const x=a[0]+d[0]*t,y=a[1]+d[1]*t,z=a[2]+d[2]*t;
+    for(let k=0;k<6;k++){const th=k/6*Math.PI*2;
+      add(x+Math.cos(th)*0.012,y,z+Math.sin(th)*0.012,Math.cos(th),0,Math.sin(th),GREEN);}
+  }
+}
+function leaf(a,len){
+  const base=[0.45*Math.cos(a),0.1,0.45*Math.sin(a)];
+  const d=norm([Math.cos(a)*0.75,0.65,Math.sin(a)*0.75]);
+  const s=[-Math.sin(a),0,Math.cos(a)];
+  const n=norm(cross(d,s));
+  for(let t=0;t<=1;t+=0.012){
+    const w=0.11*Math.sin(Math.PI*t);
+    const droop=-0.15*t*t;
+    for(let k=-w;k<=w;k+=0.012){
+      add(base[0]+d[0]*t*len+s[0]*k, base[1]+d[1]*t*len+droop+s[1]*k, base[2]+d[2]*t*len+s[2]*k,
+          n[0],n[1],n[2], DGREEN);
+    }
+  }
+}
+
+function mix(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+function at(p,u,v,n,a,b,c){return[p[0]+u[0]*a+v[0]*b+n[0]*c,p[1]+u[1]*a+v[1]*b+n[1]*c,p[2]+u[2]*a+v[2]*b+n[2]*c];}
+function dv(u,v,n,a,b,c){return norm([u[0]*a+v[0]*b+n[0]*c,u[1]*a+v[1]*b+n[1]*c,u[2]*a+v[2]*b+n[2]*c]);}
+function put(q,m,c){add(q[0],q[1],q[2],m[0],m[1],m[2],c);}
+
+// Pivoine : coupes de pétales emboîtées et froissées
+function peony(p,n,R,cOut,cIn){
+  const [u,v]=basis(n);
+  for(let s=0;s<5;s++){
+    const Rs=R*(1-s*0.16), pm=1.85+s*0.22, col=mix(cOut,cIn,s/4);
+    for(let ph=0.05;ph<pm;ph+=0.035){
+      const ring=Math.max(10,Math.floor(Math.sin(ph)*Rs*380));
+      for(let i=0;i<ring;i++){
+        const th=i/ring*Math.PI*2+s*0.5;
+        const edge=pm*(0.82+0.18*Math.abs(Math.cos(3.5*th+s*1.3)));
+        if(ph>edge) continue;
+        const rr=Rs*(1+0.06*Math.sin(11*th+s*2)*Math.sin(ph*2));
+        const a=Math.sin(ph)*Math.cos(th), b=Math.sin(ph)*Math.sin(th), c=-Math.cos(ph);
+        put(at(p,u,v,n,a*rr,b*rr,c*rr*0.8+R*0.55),dv(u,v,n,a,b,c),col);
+      }
+    }
+  }
+}
+// Lys : 6 pétales pointus qui s'ouvrent et se recourbent, étamines orange
+function lily(p,n,L,col,heart){
+  const [u,v]=basis(n);
+  for(let k=0;k<6;k++){
+    const th=k/6*Math.PI*2+(k%2)*0.12, c=Math.cos(th), sn=Math.sin(th);
+    const len=L*(k%2?0.92:1);
+    for(let t=0.02;t<=1;t+=0.007){
+      const rad=len*t, h=len*(1.05*t-0.8*t*t);
+      const w=len*0.21*Math.sin(Math.PI*Math.pow(t,0.55));
+      const tang=[c,sn,1.05-1.6*t];
+      for(let q=-w;q<=w;q+=0.009){
+        const trough=0.35*q*q/Math.max(w,0.01);
+        const pos=at(p,u,v,n,c*rad-sn*q,sn*rad+c*q,h+trough);
+        const m=norm(cross(dv(u,v,n,...tang),dv(u,v,n,-sn,c,0)));
+        put(pos,m,mix(heart,col,Math.min(1,t/0.5)));
+      }
+    }
+  }
+  for(let k=0;k<6;k++){
+    const th=k/6*Math.PI*2+0.5, c=Math.cos(th), sn=Math.sin(th);
+    for(let t=0;t<=1;t+=0.02) put(at(p,u,v,n,c*L*0.28*t,sn*L*0.28*t,L*0.6*t),[0,1,0],[200,230,170]);
+    const tip=at(p,u,v,n,c*L*0.28,sn*L*0.28,L*0.6);
+    sphere(tip,0.022,[200,90,30]);
+  }
+}
+// Arum : spathe blanche en cornet évasé + spadice jaune
+function calla(p,n,H,col){
+  const [u,v]=basis(n);
+  for(let h=0;h<=H;h+=0.007){
+    const r=0.012+0.42*H*Math.pow(h/H,1.7);
+    const ring=Math.max(12,Math.floor(r*420));
+    for(let i=0;i<ring;i++){
+      const th=i/ring*Math.PI*2;
+      const top=H*(0.68+0.32*Math.cos(th));
+      if(h>top) continue;
+      const flare=1+0.35*Math.max(0,(h-top+0.12*H)/(0.12*H));
+      const rr=r*flare;
+      put(at(p,u,v,n,Math.cos(th)*rr,Math.sin(th)*rr,h),dv(u,v,n,Math.cos(th),Math.sin(th),-0.6),col);
+    }
+  }
+  for(let h=0;h<=H*0.62;h+=0.008)
+    for(let k=0;k<8;k++){const th=k/8*Math.PI*2;
+      put(at(p,u,v,n,Math.cos(th)*0.02,Math.sin(th)*0.02,h),dv(u,v,n,Math.cos(th),Math.sin(th),0),[250,200,40]);}
+}
+
+const PEONY=[255,140,180], PEONY_IN=[220,60,120], CORAL=[255,120,110], CORAL_IN=[230,60,80];
+const LILY=[252,248,245], LILY_HEART=[255,120,170], LILY_PINK=[255,175,205];
+const CALLA=[245,245,240];
+const base=[0,-0.9,0];
+const items=[];
+items.push(['peony',[0,0.9,0],[0,1,0],0.33,PEONY,PEONY_IN]);
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2+0.3, ca=Math.cos(a), sa=Math.sin(a), kind=i%3;
+  if(kind===0) items.push(['lily',[0.5*ca,0.74,0.5*sa],norm([ca*0.75,0.65,sa*0.75]),0.42,i?LILY_PINK:LILY,LILY_HEART]);
+  if(kind===1) items.push(['peony',[0.52*ca,0.64,0.52*sa],norm([ca*0.7,0.7,sa*0.7]),0.25,i===4?PEONY:CORAL,i===4?PEONY_IN:CORAL_IN]);
+  if(kind===2) items.push(['calla',[0.44*ca,0.76,0.44*sa],norm([ca*0.55,0.83,sa*0.55]),0.5,CALLA]);
+}
+// arums supplémentaires entre les fleurs
+for(const a of[0.3+Math.PI/6*3, 0.3+Math.PI/6*7, 0.3+Math.PI/6*11]){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  items.push(['calla',[0.7*ca,0.42,0.7*sa],norm([ca*0.85,0.5,sa*0.85]),0.42,CALLA]);
+}
+for(const it of items){
+  stem(base,it[1]);
+  if(it[0]==='peony') peony(it[1],it[2],it[3],it[4],it[5]);
+  if(it[0]==='lily') lily(it[1],it[2],it[3],it[4],it[5]);
+  if(it[0]==='calla') calla(it[1],it[2],it[3],it[4]);
+}
+for(let i=0;i<7;i++) leaf(i/7*Math.PI*2+0.2, 0.45);
+for(let i=0;i<6;i++) leaf(i/6*Math.PI*2+0.75, 0.6);
+
+// ---- Papier d'emballage (cône festonné)
+const yB=-0.95, yT=0.2, rB=0.08, rT=0.62, slope=(rT-rB)/(yT-yB);
+for(let th=0;th<Math.PI*2;th+=0.022){
+  const top=yT+0.09*Math.cos(6*th);
+  for(let y=yB;y<=top;y+=0.012){
+    const r=rB+(y-yB)*slope;
+    const n=norm([Math.cos(th),-slope,Math.sin(th)]);
+    let col=KRAFT;
+    if(y>-0.47&&y<-0.37) col=RIBBON;
+    add(r*Math.cos(th),y,r*Math.sin(th),n[0],n[1],n[2],col);
+  }
+}
+// noeud
+{
+  const yb=-0.42, rr=rB+(yb-yB)*slope+0.02;
+  for(const sx of[-1,1]){
+    for(let t=0;t<Math.PI*2;t+=0.03){
+      for(let k=0.4;k<=1;k+=0.1){
+        const x=sx*(0.1+0.1*Math.cos(t))*k*1.1, y=yb+0.06*Math.sin(t)*k;
+        add(x,y,-rr-0.01,0,0,-1,RIBBON);
+      }
+    }
+    for(let t=0;t<1;t+=0.01) add(sx*0.06*t,yb-0.25*t,-rr+0.02*t-0.005,0,0,-1,RIBBON);
+  }
+  sphere([0,yb,-rr-0.01],0.03,RIBBON);
+}
+
+const N=P.length/10, pts=new Float32Array(P);
+
+// ---- Rendu
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let fs=10,cw=6,ox=0,oy=0;
+function resize(){
+  const dpr=window.devicePixelRatio||1;
+  cv.width=innerWidth*dpr; cv.height=innerHeight*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  fs=Math.min(innerWidth/(COLS*0.6), innerHeight*0.92/ROWS);
+  cw=fs*0.6;
+  ox=(innerWidth-COLS*cw)/2; oy=(innerHeight-ROWS*fs)/2-fs*1.5;
+  ctx.font=`bold ${fs}px ui-monospace,Menlo,Consolas,monospace`;
+  ctx.textBaseline='top';
+}
+addEventListener('resize',resize); resize();
+
+const zb=new Float32Array(COLS*ROWS), ch=new Int8Array(COLS*ROWS), cr=new Uint8Array(COLS*ROWS*3);
+const L=norm([-0.45,0.35,-0.85]);
+const tilt=0.38, ct=Math.cos(tilt), st=Math.sin(tilt);
+const K2=4.4, K1=118;
+let ang=0, paused=false, last=performance.now();
+addEventListener('click',()=>paused=!paused);
+
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!paused) ang+=dt*0.9;
+  const ca=Math.cos(ang), sa=Math.sin(ang);
+  zb.fill(0); ch.fill(-1);
+  for(let i=0;i<N;i++){
+    const o=i*10;
+    let x=pts[o],y=pts[o+1]-0.12,z=pts[o+2];
+    let nx=pts[o+3],ny=pts[o+4],nz=pts[o+5];
+    // rotation Y
+    let x1=x*ca+z*sa, z1=-x*sa+z*ca;
+    let nx1=nx*ca+nz*sa, nz1=-nx*sa+nz*ca;
+    // inclinaison X (vue légèrement du dessus)
+    let y2=y*ct+z1*st, z2=-y*st+z1*ct;
+    let ny2=ny*ct+nz1*st, nz2=-ny*st+nz1*ct;
+    const ooz=1/(z2+K2);
+    const px=(COLS/2+K1*x1*ooz*1.65)|0, py=(ROWS/2-K1*y2*ooz*0.98)|0;
+    if(px<0||px>=COLS||py<0||py>=ROWS) continue;
+    const idx=py*COLS+px;
+    if(ooz<=zb[idx]) continue;
+    zb[idx]=ooz;
+    if(nz2>0){nx1=-nx1;ny2=-ny2;nz2=-nz2;}
+    let lum=nx1*L[0]+ny2*L[1]+nz2*L[2];
+    if(pts[o+9]) lum=0.5;
+    lum=Math.max(0.08,Math.min(1,lum*0.75+0.25));
+    ch[idx]=Math.min(RAMP.length-1,(lum*RAMP.length)|0);
+    const k=0.35+0.65*lum;
+    cr[idx*3]=pts[o+6]*k; cr[idx*3+1]=pts[o+7]*k; cr[idx*3+2]=pts[o+8]*k;
+  }
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const idx=r*COLS+c;
+      if(ch[idx]<0) continue;
+      ctx.fillStyle=`rgb(${cr[idx*3]},${cr[idx*3+1]},${cr[idx*3+2]})`;
+      ctx.fillText(RAMP[ch[idx]],ox+c*cw,oy+r*fs);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
